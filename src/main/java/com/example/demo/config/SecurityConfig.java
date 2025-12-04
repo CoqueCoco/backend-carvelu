@@ -11,6 +11,10 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.http.HttpMethod;
+import org.springframework.web.cors.CorsConfiguration; 
+import org.springframework.web.cors.CorsConfigurationSource; 
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import java.util.Arrays; 
 
 @Configuration
 public class SecurityConfig {
@@ -21,37 +25,39 @@ public class SecurityConfig {
         this.jwtFilter = jwtFilter;
     }
 
+    // CORS
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(Arrays.asList("http://localhost:5173", "http://localhost:3000")); 
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(Arrays.asList("*")); // Permitir todo header
+        configuration.setAllowCredentials(true); 
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration cfg) throws Exception {
-        return cfg.getAuthenticationManager();
-    }
+    public PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration cfg) throws Exception { return cfg.getAuthenticationManager(); }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-
-        http.csrf(csrf -> csrf.disable())
-
-            .sessionManagement(session ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-            )
-
+        http
+            .cors(cors -> cors.configurationSource(corsConfigurationSource())) 
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-
+                // Rutas públicas
                 .requestMatchers("/auth/**").permitAll()
-
                 .requestMatchers(HttpMethod.GET, "/products/**").permitAll()
-
-                .requestMatchers(HttpMethod.POST, "/products/**").hasAuthority("ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/products/**").hasAuthority("ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/products/**").hasAuthority("ADMIN")
-
-                .requestMatchers("/cart/**").hasAnyAuthority("USER", "ADMIN")
-                .requestMatchers("/orders/**").hasAnyAuthority("USER", "ADMIN")
+                
+                .requestMatchers("/cart/**").authenticated() 
+                .requestMatchers("/orders/**").authenticated()
 
                 .anyRequest().authenticated()
             )
