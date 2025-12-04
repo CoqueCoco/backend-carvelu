@@ -24,44 +24,52 @@ public class AuthService {
     @Autowired
     private JwtService jwtService;
 
+    // ============================
+    // REGISTER
+    // ============================
     public AuthResponse register(AuthRequest request) {
 
+        // Validar si email ya existe
         if (userRepo.findByEmail(request.getEmail()).isPresent()) {
-            return new AuthResponse("Email already used", null, null);
+            // El campo name será null en la respuesta de error
+            return new AuthResponse("Email already used", null, null); 
         }
 
+        // Crear nuevo usuario
         User user = new User();
         user.setName(request.getName());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRoles(Set.of("USER"));
+        user.setRoles(Set.of("USER")); 
 
         userRepo.save(user);
 
+        // Generar JWT
         String token = jwtService.generateToken(user);
 
-        return new AuthResponse(
-                "User registered",
-                user.getEmail(),
-                token
-        );
+        // Retornar nombre en caso de registro exitoso
+        return new AuthResponse("User registered", token, user.getName());
     }
 
+    // ============================
+    // LOGIN
+    // ============================
     public AuthResponse login(AuthRequest request) {
 
+        // Buscar usuario por email
         var user = userRepo.findByEmail(request.getEmail())
                 .orElse(null);
 
+        // Validar credenciales
         if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            return new AuthResponse("Invalid credentials", null, null);
+            // ✅ Mensaje de error personalizado y name=null
+            return new AuthResponse("Contraseña incorrecta, por favor intentar de nuevo", null, null); 
         }
 
+        // Generar token JWT
         String token = jwtService.generateToken(user);
 
-        return new AuthResponse(
-                "User authenticated",
-                user.getEmail(),
-                token
-        );
+        // ✅ Retornar nombre en caso de autenticación exitosa
+        return new AuthResponse("User authenticated", token, user.getName());
     }
 }

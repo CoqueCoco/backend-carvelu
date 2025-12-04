@@ -4,17 +4,21 @@ import java.io.IOException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.example.demo.repository.UserRepository;
 
-import jakarta.servlet.*;
-import jakarta.servlet.http.*;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Component
-public class JwtAuthFilter implements Filter {
+public class JwtAuthFilter extends OncePerRequestFilter {
 
     @Autowired
     private JwtService jwtService;
@@ -23,21 +27,35 @@ public class JwtAuthFilter implements Filter {
     private UserRepository userRepo;
 
     @Override
-    public void doFilter(
-            ServletRequest request,
-            ServletResponse response,
-            FilterChain chain) throws IOException, ServletException {
+    protected void doFilterInternal(
+            HttpServletRequest req,
+            HttpServletResponse res,
+            FilterChain chain) throws ServletException, IOException {
 
-        HttpServletRequest req = (HttpServletRequest) request;
+        String path = req.getServletPath();
+
+        // Permitir todo lo que empiece con /auth sin JWT
+        if (path.startsWith("/auth")) {
+            chain.doFilter(req, res);
+            return;
+        }
+
         String authHeader = req.getHeader("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            chain.doFilter(request, response);
+            chain.doFilter(req, res);
             return;
         }
 
         String token = authHeader.substring(7);
-        String email = jwtService.extractEmail(token);
+        String email;
+
+        try {
+            email = jwtService.extractEmail(token);
+        } catch (Exception e) {
+            chain.doFilter(req, res);
+            return;
+        }
 
         if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
@@ -46,7 +64,7 @@ public class JwtAuthFilter implements Filter {
             if (user != null && jwtService.isTokenValid(token, user)) {
 
                 var authorities = user.getRoles().stream()
-                        .map(role -> (org.springframework.security.core.GrantedAuthority) () -> role)
+                        .map(role -> (GrantedAuthority) () -> role)
                         .toList();
 
                 UsernamePasswordAuthenticationToken auth =
@@ -57,6 +75,6 @@ public class JwtAuthFilter implements Filter {
             }
         }
 
-        chain.doFilter(request, response);
+        chain.doFilter(req, res);
     }
 }
